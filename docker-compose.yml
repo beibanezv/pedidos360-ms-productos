@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pedidos360-productos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pedidos360_productos
+      POSTGRES_USER: pedidos360
+      POSTGRES_PASSWORD: pedidos360
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pedidos360 -d pedidos360_productos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

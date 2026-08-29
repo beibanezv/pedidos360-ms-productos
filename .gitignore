@@ -1,0 +1,27 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# Spring Boot / secrets
+application-secrets*.properties
+application-prod-secrets*.properties
+.env
+*.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
