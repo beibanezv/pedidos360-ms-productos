@@ -15,8 +15,11 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-  @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:}")
+  @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://login.microsoftonline.com/}")
   private String issuerUri;
+
+  @Value("${azure.tenant-id:common}")
+  private String tenantId;
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -38,32 +41,16 @@ public class SecurityConfig {
 
   @Bean
   public JwtDecoder jwtDecoder() {
-    // SIMPLIFICADO: issuer-uri viene de AZURE_TENANT_JWKS_URI (variable de entorno).
-    // En local/test sin tenant real, NO hacer discovery contra Azure al arrancar
-    // (Azure con "common" devuelve issuer "{tenantid}" y withIssuerLocation falla).
-    // Solo cuando haya un tenant UUID real se hace withIssuerLocation (valida firma contra JWKS).
-    String issuer = (issuerUri != null && !issuerUri.isBlank())
+    // SIMPLIFICADO: estilo visto en clase — jwks = issuerUri + tenantId + "/discovery/v2.0/keys".
+    // Sin tenant real ('common') no hay fetch en startup: los GET públicos siguen OK
+    // y el resto devuelve 401 sin tocar red. Con tenant real valida firma contra JWKS de Azure.
+    String base = (issuerUri != null && !issuerUri.isBlank())
         ? issuerUri.trim()
-        : "";
-
-    boolean esPlaceholder = issuer.isEmpty()
-        || issuer.contains("{")
-        || issuer.contains("tenantid")
-        || issuer.contains("__")
-        || issuer.contains("common")
-        || issuer.contains("REEMPLAZA")
-        || issuer.contains("TENANT_ID");
-
-    // Heuristica simple: un issuer real de Azure contiene un UUID
-    boolean pareceUuid = issuer.matches(".*[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}.*");
-
-    if (esPlaceholder || !pareceUuid) {
-      // Local/dev: decoder que no hace fetch en startup. Solo intentará descargar JWK si llega un JWT.
-      // GET /productos sigue público; POST/PUT/DELETE sin token -> 401 sin tocar red.
-      String jwkSetUri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
-      return NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        : "https://login.microsoftonline.com/";
+    if (!base.endsWith("/")) {
+      base += "/";
     }
-
-    return NimbusJwtDecoder.withIssuerLocation(issuer).build();
+    String tid = (tenantId != null && !tenantId.isBlank()) ? tenantId.trim() : "common";
+    return NimbusJwtDecoder.withJwkSetUri(base + tid + "/discovery/v2.0/keys").build();
   }
 }
