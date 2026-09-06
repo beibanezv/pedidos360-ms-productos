@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -87,7 +88,7 @@ class ProductoControllerTest {
   }
 
   @Test
-  void postProductos_conJwt_retorna201() throws Exception {
+  void postProductos_conJwtAdmin_retorna201() throws Exception {
     Producto p = productoEjemplo();
     Producto guardado = productoEjemplo();
     when(repository.save(any(Producto.class))).thenReturn(guardado);
@@ -96,11 +97,25 @@ class ProductoControllerTest {
     payload.setId(null);
 
     mockMvc.perform(post("/productos")
-            .with(jwt())
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Admin")))
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.nombre").value("Abbey Road"));
+  }
+
+  @Test
+  void postProductos_conJwtSinRolAdmin_retorna403() throws Exception {
+    Producto payload = productoEjemplo();
+    payload.setId(null);
+
+    mockMvc.perform(post("/productos")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Cliente")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isForbidden());
+
+    Mockito.verify(repository, Mockito.never()).save(any(Producto.class));
   }
 
   @Test

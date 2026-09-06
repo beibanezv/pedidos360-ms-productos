@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,6 +44,9 @@ public class ProductoController {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
   }
 
+  // SIMPLIFICADO: solo Admin escribe el catálogo (autorización por rol);
+  // la lectura sigue pública. El Gateway ya validó firma/iss/aud en el borde.
+  @PreAuthorize("hasRole('Admin')")
   @PostMapping
   public ResponseEntity<Producto> crear(@Valid @RequestBody Producto producto) {
     // asegurar que JPA genere el id
@@ -51,6 +55,7 @@ public class ProductoController {
     return ResponseEntity.status(HttpStatus.CREATED).body(guardado);
   }
 
+  @PreAuthorize("hasRole('Admin')")
   @PutMapping("/{id}")
   public Producto actualizar(@PathVariable UUID id, @Valid @RequestBody Producto producto) {
     Producto existente = repository.findById(id)
@@ -64,6 +69,7 @@ public class ProductoController {
     return repository.save(existente);
   }
 
+  @PreAuthorize("hasRole('Admin')")
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> eliminar(@PathVariable UUID id) {
     if (!repository.existsById(id)) {
