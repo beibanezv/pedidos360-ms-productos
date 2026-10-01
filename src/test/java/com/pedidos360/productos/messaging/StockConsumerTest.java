@@ -52,7 +52,7 @@ class StockConsumerTest {
     when(productoRepository.findById(sku)).thenReturn(Optional.of(productoConStock(sku, 10)));
 
     consumer.descontarStock(
-        new OrdenRegistradaEvent(UUID.randomUUID(), "u1",
+        new OrdenRegistradaEvent(UUID.randomUUID(), "u1", "comprador@mail.com",
             List.of(new OrdenRegistradaEvent.Item(sku, 3)), null),
         channel, 1L, mensajeSinMuertes());
 
@@ -67,7 +67,7 @@ class StockConsumerTest {
     when(productoRepository.findById(sku)).thenReturn(Optional.empty());
 
     consumer.descontarStock(
-        new OrdenRegistradaEvent(UUID.randomUUID(), "u1",
+        new OrdenRegistradaEvent(UUID.randomUUID(), "u1", "comprador@mail.com",
             List.of(new OrdenRegistradaEvent.Item(sku, 1)), null),
         channel, 2L, mensajeSinMuertes());
 
@@ -81,7 +81,7 @@ class StockConsumerTest {
     when(productoRepository.findById(sku)).thenThrow(new RuntimeException("BD caída"));
 
     consumer.descontarStock(
-        new OrdenRegistradaEvent(UUID.randomUUID(), "u1",
+        new OrdenRegistradaEvent(UUID.randomUUID(), "u1", "comprador@mail.com",
             List.of(new OrdenRegistradaEvent.Item(sku, 1)), null),
         channel, 3L, mensajeSinMuertes());
 
@@ -94,7 +94,7 @@ class StockConsumerTest {
     when(productoRepository.findById(sku)).thenThrow(new RuntimeException("BD caída"));
 
     consumer.descontarStock(
-        new OrdenRegistradaEvent(UUID.randomUUID(), "u1",
+        new OrdenRegistradaEvent(UUID.randomUUID(), "u1", "comprador@mail.com",
             List.of(new OrdenRegistradaEvent.Item(sku, 1)), null),
         channel, 4L, mensajeConMuertes(3));
 
