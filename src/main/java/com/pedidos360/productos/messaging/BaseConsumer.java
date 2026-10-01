@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.amqp.core.Message;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Plantilla de ACK manual para todos los consumidores del ecosistema
@@ -18,6 +20,8 @@ import org.springframework.amqp.core.Message;
  */
 public abstract class BaseConsumer {
 
+  private final Logger log = LoggerFactory.getLogger(getClass());
+
   /** Reintentos de errores transitorios antes de mandar a la DLQ. */
   protected int maxReintentos() {
     return 3;
@@ -28,13 +32,19 @@ public abstract class BaseConsumer {
     try {
       accion.ejecutar();
       channel.basicAck(tag, false);
+      log.debug("Mensaje confirmado tag={}", tag);
     } catch (IllegalArgumentException e) {
       // Permanente: a la DLQ sin gastar reintentos.
+      log.warn("Mensaje enviado a DLQ por error permanente tag={} causa={}", tag, e.getMessage());
       channel.basicNack(tag, false, false);
     } catch (RuntimeException e) {
       if (muertes(raw) >= maxReintentos()) {
+        log.error("Mensaje enviado a DLQ tras {} reintentos tag={} causa={}",
+            maxReintentos(), tag, e.getMessage(), e);
         channel.basicNack(tag, false, false);
       } else {
+        log.warn("Reintentando mensaje tag={} intento={} de {} causa={}",
+            tag, muertes(raw) + 1, maxReintentos(), e.getMessage());
         channel.basicNack(tag, false, true);
       }
     }
