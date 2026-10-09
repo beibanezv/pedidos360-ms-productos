@@ -14,7 +14,11 @@ mvn spring-boot:run           # app en http://localhost:8081
 ```
 
 Variables opcionales:
-- `AZURE_TENANT_JWKS_URI` — issuer de Azure AD. Ej: `https://login.microsoftonline.com/<tenant-id>/v2.0`
+- `AZURE_TENANT_ID` — Directory (tenant) ID de Entra ID. Con ese valor el servicio
+  arma el issuer `https://sts.windows.net/<tenant-id>/` y va a buscar las llaves
+  a `https://login.microsoftonline.com/<tenant-id>/discovery/keys`.
+  Los tokens de este tenant son **v1.0**: si se apunta a la ruta `/v2.0` no valida
+  ninguno y todas las peticiones protegidas dan 401.
   Si no se define, GET públicos funcionan igual; POST/PUT/DELETE requieren JWT y fallarán con 401 hasta configurar el tenant.
 
 ## Endpoints
@@ -31,7 +35,7 @@ SPRING_PROFILES_ACTIVE=prod \
 SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/<db> \
 SPRING_DATASOURCE_USERNAME=<user> \
 SPRING_DATASOURCE_PASSWORD=<pass> \
-AZURE_TENANT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/v2.0 \
+AZURE_TENANT_ID=<Directory (tenant) ID> \
 java -jar target/ms-productos-*.jar
 ```
 
