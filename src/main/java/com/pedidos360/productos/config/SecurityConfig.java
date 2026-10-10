@@ -13,7 +13,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -32,6 +34,9 @@ public class SecurityConfig {
 
   @Value("${azure.tenant-id:common}")
   private String tenantId;
+
+  @Value("${cognito.jwks-uri:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_A8lrPsDta/.well-known/jwks.json}")
+  private String cognitoJwksUri;
 
   @Value("${cors.allowed-origins:http://localhost:4200}")
   private String allowedOrigins;
@@ -72,6 +77,14 @@ public class SecurityConfig {
           authorities.add(new SimpleGrantedAuthority("ROLE_" + r));
         }
       }
+      // SIMPLIFICADO: Cognito no emite "scp" ni "roles". Todo token válido de
+      // nuestro pool es comprador (ROLE_Cliente); la escritura del catálogo
+      // sigue exigiendo ROLE_Admin (@PreAuthorize), que solo existe en Azure,
+      // así que Cognito lee el catálogo pero no lo administra (403, no 401).
+      // Alternativa: mapear "cognito:groups" a roles cuando el pool tenga grupos.
+      if (jwt.getClaimAsString("token_use") != null) {
+        authorities.add(new SimpleGrantedAuthority("ROLE_Cliente"));
+      }
       return authorities;
     });
     return converter;
@@ -99,6 +112,9 @@ public class SecurityConfig {
     // por eso se usa el JWKS v1: issuerUri + tenantId + "/discovery/keys".
     // Sin tenant real ('common') no hay fetch en startup: los GET públicos siguen OK
     // y el resto devuelve 401 sin tocar red. Con tenant real valida firma contra JWKS de Azure.
+    // Segundo emisor (Cognito): se prueba Azure primero porque sostiene la
+    // evaluación 1; si la firma no calza ahí se intenta con el JWKS del pool.
+    // El JWKS solo se descarga al validar el primer token de cada emisor.
     String base = (issuerUri != null && !issuerUri.isBlank())
         ? issuerUri.trim()
         : "https://login.microsoftonline.com/";
@@ -106,6 +122,16 @@ public class SecurityConfig {
       base += "/";
     }
     String tid = (tenantId != null && !tenantId.isBlank()) ? tenantId.trim() : "common";
-    return NimbusJwtDecoder.withJwkSetUri(base + tid + "/discovery/keys").build();
+    NimbusJwtDecoder azure = NimbusJwtDecoder.withJwkSetUri(base + tid + "/discovery/keys").build();
+    NimbusJwtDecoder cognito = NimbusJwtDecoder.withJwkSetUri(cognitoJwksUri.trim()).build();
+    return token -> decodeDual(azure, cognito, token);
+  }
+
+  static Jwt decodeDual(JwtDecoder primario, JwtDecoder respaldo, String token) {
+    try {
+      return primario.decode(token);
+    } catch (JwtException e) {
+      return respaldo.decode(token);
+    }
   }
 }
