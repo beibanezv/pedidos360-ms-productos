@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pedidos360.productos.config.SecurityConfig;
 import com.pedidos360.productos.model.Categoria;
 import com.pedidos360.productos.model.Producto;
+import com.pedidos360.productos.messaging.InteraccionEvent;
 import com.pedidos360.productos.repository.ProductoRepository;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -30,10 +33,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 
 @WebMvcTest(com.pedidos360.productos.controller.ProductoController.class)
 @Import(SecurityConfig.class)
+@RecordApplicationEvents
 class ProductoControllerTest {
 
   @Autowired MockMvc mockMvc;
   @Autowired ObjectMapper objectMapper;
+  @Autowired ApplicationEvents events;
 
   @MockBean ProductoRepository repository;
   @MockBean JwtDecoder jwtDecoder;
@@ -135,6 +140,22 @@ class ProductoControllerTest {
     mockMvc.perform(get("/productos/{id}", p.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.nombre").value("Abbey Road"));
+    org.assertj.core.api.Assertions.assertThat(events.stream(InteraccionEvent.class)).isEmpty();
+  }
+
+  @Test
+  void visitaAutenticadaRegistraProductoYComprador() throws Exception {
+    Producto p = productoEjemplo();
+    when(repository.findById(p.getId())).thenReturn(Optional.of(p));
+
+    mockMvc.perform(get("/productos/{id}", p.getId())
+            .with(jwt().jwt(j -> j.claim("oid", "comprador"))))
+        .andExpect(status().isOk());
+
+    var evento = events.stream(InteraccionEvent.class).findFirst().orElseThrow();
+    org.assertj.core.api.Assertions.assertThat(evento.usuarioId()).isEqualTo("comprador");
+    org.assertj.core.api.Assertions.assertThat(evento.tipo()).isEqualTo(InteraccionEvent.Tipo.DETALLE_PRODUCTO);
+    org.assertj.core.api.Assertions.assertThat(evento.productoId()).isEqualTo(p.getId());
   }
 
   @Test
