@@ -29,6 +29,13 @@ public class RabbitMQConfig {
   public static final String STOCK_QUEUE = "p360.stock.queue";
   public static final String ORDEN_REGISTRADA_ROUTING_KEY = "orden.registrada";
 
+  // C3/C4 congelado (G0 2026-11-27): eventos de reserva sobre los exchanges existentes.
+  public static final String STOCK_RESERVADO_ROUTING_KEY = "stock.reservado";
+  public static final String STOCK_RECHAZADO_ROUTING_KEY = "stock.rechazado";
+  public static final String STOCK_LIBERADO_ROUTING_KEY = "stock.liberado";
+  public static final String LIBERACIONES_STOCK_QUEUE = "p360.liberaciones.stock.queue";
+  public static final String LIBERACIONES_STOCK_DLQ = "p360.liberaciones.stock.dlq";
+
   // Límite de reintentos de errores transitorios (ver StockConsumer).
   public static final int MAX_REINTENTOS = 3;
 
@@ -70,6 +77,32 @@ public class RabbitMQConfig {
   Binding stockDlqBinding(Queue stockDlq, DirectExchange deadLetterExchange) {
     return new Binding(STOCK_DLQ, Binding.DestinationType.QUEUE,
         DLX_EXCHANGE, STOCK_QUEUE, null);
+  }
+
+  // Matías declara solo la topología C3; el consumidor lo escribe Benjamín.
+  @Bean
+  Queue liberacionesStockQueue() {
+    return QueueBuilder.durable(LIBERACIONES_STOCK_QUEUE)
+        .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
+        .withArgument("x-dead-letter-routing-key", LIBERACIONES_STOCK_QUEUE)
+        .build();
+  }
+
+  @Bean
+  Binding liberacionesStockBinding(Queue liberacionesStockQueue, TopicExchange eventosExchange) {
+    return new Binding(LIBERACIONES_STOCK_QUEUE, Binding.DestinationType.QUEUE,
+        EVENTOS_EXCHANGE, STOCK_LIBERADO_ROUTING_KEY, null);
+  }
+
+  @Bean
+  Queue liberacionesStockDlq() {
+    return QueueBuilder.durable(LIBERACIONES_STOCK_DLQ).build();
+  }
+
+  @Bean
+  Binding liberacionesStockDlqBinding(Queue liberacionesStockDlq, DirectExchange deadLetterExchange) {
+    return new Binding(LIBERACIONES_STOCK_DLQ, Binding.DestinationType.QUEUE,
+        DLX_EXCHANGE, LIBERACIONES_STOCK_QUEUE, null);
   }
 
   // Los eventos viajan como JSON (records de messaging.*).
