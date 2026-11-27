@@ -23,6 +23,9 @@ import org.springframework.amqp.core.MessageProperties;
 @ExtendWith(MockitoExtension.class)
 class LiberacionStockConsumerTest {
 
+  // Reintento real en el mismo delivery (M06b): acortar la espera en tests.
+  static { System.setProperty("p360.retry.espera-ms", "0"); }
+
   @Mock ReservaStockService servicio;
   @Mock Channel channel;
   @InjectMocks LiberacionStockConsumer consumer;
@@ -60,12 +63,13 @@ class LiberacionStockConsumerTest {
   }
 
   @Test
-  void falloTransitorioNackConRequeue() throws Exception {
+  void falloTransitorioNackSinRequeueTrasReintentos() throws Exception {
     StockLiberadoEvent event = evento();
     doThrow(new IllegalStateException("BD caída")).when(servicio).liberar(event);
 
     consumer.liberarStock(event, channel, 3L, mensaje(0));
 
-    verify(channel).basicNack(3L, false, true);
+    // M06b: reintento en el mismo delivery (sin requeue) y DLQ tras maxReintentos.
+    verify(channel).basicNack(3L, false, false);
   }
 }
