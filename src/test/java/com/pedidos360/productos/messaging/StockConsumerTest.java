@@ -3,6 +3,7 @@ package com.pedidos360.productos.messaging;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,9 @@ import org.springframework.amqp.core.MessageProperties;
 /** ACK/NACK del listener; la lógica transaccional se prueba en ReservaStockServiceTest. */
 @ExtendWith(MockitoExtension.class)
 class StockConsumerTest {
+
+  // Reintento real en el mismo delivery (M06b): acortar la espera en tests.
+  static { System.setProperty("p360.retry.espera-ms", "0"); }
 
   @Mock ReservaStockService servicio;
   @Mock Channel channel;
@@ -79,13 +83,16 @@ class StockConsumerTest {
   }
 
   @Test
-  void falloTransitorioPrimerIntentoNackConRequeue() throws Exception {
+  void falloTransitorioNackSinRequeueTrasReintentosEnElMismoDelivery() throws Exception {
     OrdenRegistradaEvent event = evento(UUID.randomUUID());
     doThrow(new IllegalStateException("BD caída")).when(servicio).reservar(event);
 
     consumer.descontarStock(event, channel, 4L, mensajeSinMuertes());
 
-    verify(channel).basicNack(4L, false, true);
+    // M06b: el reintento ocurre en el mismo delivery (sin requeue); tras
+    // maxReintentos() se envía a la DLQ con basicNack(..., false).
+    verify(channel, never()).basicNack(anyLong(), anyBoolean(), eq(true));
+    verify(channel).basicNack(4L, false, false);
   }
 
   @Test
