@@ -1,10 +1,20 @@
 package com.pedidos360.productos.config;
 
+import com.fasterxml.jackson.databind.JavaType;
+import com.pedidos360.productos.messaging.OrdenRegistradaEvent;
+import com.pedidos360.productos.messaging.StockLiberadoEvent;
+import com.pedidos360.productos.messaging.StockRechazadoEvent;
+import com.pedidos360.productos.messaging.StockReservadoEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
+import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -105,9 +115,54 @@ public class RabbitMQConfig {
         DLX_EXCHANGE, LIBERACIONES_STOCK_QUEUE, null);
   }
 
-  // Los eventos viajan como JSON (records de messaging.*).
+  private static final Map<Class<?>, String> SIMPLE_IDS = Map.of(
+      OrdenRegistradaEvent.class, "OrdenRegistradaEvent",
+      StockReservadoEvent.class, "StockReservadoEvent",
+      StockRechazadoEvent.class, "StockRechazadoEvent",
+      StockLiberadoEvent.class, "StockLiberadoEvent");
+
+  /**
+   * Contrato por nombre simple: __TypeId__ lleva "OrdenRegistradaEvent" o el
+   * evento de stock correspondiente. Los FQCN historicos se mapean a la clase
+   * local de este servicio, sin trustedPackages comodin.
+   */
+  public static DefaultJackson2JavaTypeMapper jsonTypeMapper() {
+    Map<String, Class<?>> ids = new LinkedHashMap<>();
+
+    ids.put("com.pedidos360.orders.messaging.OrdenRegistradaEvent", OrdenRegistradaEvent.class);
+    ids.put("com.pedidos360.notificaciones.messaging.OrdenRegistradaEvent", OrdenRegistradaEvent.class);
+    ids.put("cl.pedidos360.cupones.messaging.OrdenRegistradaEvent", OrdenRegistradaEvent.class);
+
+    ids.put("com.pedidos360.orders.messaging.StockReservadoEvent", StockReservadoEvent.class);
+    ids.put("com.pedidos360.orders.messaging.StockRechazadoEvent", StockRechazadoEvent.class);
+    ids.put("com.pedidos360.orders.messaging.StockLiberadoEvent", StockLiberadoEvent.class);
+
+    ids.put("OrdenRegistradaEvent", OrdenRegistradaEvent.class);
+    ids.put("StockReservadoEvent", StockReservadoEvent.class);
+    ids.put("StockRechazadoEvent", StockRechazadoEvent.class);
+    ids.put("StockLiberadoEvent", StockLiberadoEvent.class);
+
+    // El mapper invierte el mapa en un HashMap: fijamos el nombre simple para
+    // que ningun alias FQCN se escriba en __TypeId__ al publicar.
+    DefaultJackson2JavaTypeMapper mapper = new DefaultJackson2JavaTypeMapper() {
+      @Override
+      public void fromJavaType(JavaType javaType, MessageProperties properties) {
+        super.fromJavaType(javaType, properties);
+        String simple = SIMPLE_IDS.get(javaType.getRawClass());
+        if (simple != null) {
+          properties.setHeader(DEFAULT_CLASSID_FIELD_NAME, simple);
+        }
+      }
+    };
+    mapper.setIdClassMapping(ids);
+    mapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.TYPE_ID);
+    return mapper;
+  }
+
   @Bean
   MessageConverter jsonMessageConverter() {
-    return new Jackson2JsonMessageConverter();
+    Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
+    converter.setJavaTypeMapper(jsonTypeMapper());
+    return converter;
   }
 }
