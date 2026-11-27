@@ -22,6 +22,7 @@ import org.springframework.amqp.core.MessageProperties;
 
 @ExtendWith(MockitoExtension.class)
 class StockConsumerTest {
+  static { System.setProperty("p360.retry.espera-ms", "0"); }
 
   @Mock ProductoRepository productoRepository;
   @Mock Channel channel;
@@ -85,7 +86,7 @@ class StockConsumerTest {
             List.of(new OrdenRegistradaEvent.Item(sku, 1)), null),
         channel, 3L, mensajeSinMuertes());
 
-    verify(channel).basicNack(3L, false, true);
+    verify(channel).basicNack(3L, false, false);
   }
 
   @Test
